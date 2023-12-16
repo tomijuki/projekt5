@@ -156,6 +156,7 @@ openRequest.onerror = function () {
             deleteRequest.onsuccess = function () {
               console.log(`Recording at index ${index + 1} removed successfully`);
               updateAudioList();
+              notifyUser('Audio Removed', `Recording ${index + 1} has been removed from the playlist.`);
             };
 
             deleteRequest.onerror = function () {
@@ -167,6 +168,51 @@ openRequest.onerror = function () {
         };
       };
     }
+
+    function notifyUser(title, message) {
+  // Check if the browser supports notifications
+  if (!('Notification' in window)) {
+    console.error('This browser does not support notifications.');
+    return;
+  }
+
+  // Request notification permission if not granted
+  if (Notification.permission !== 'granted') {
+    requestNotificationPermission().then(() => {
+      showNotification(title, message);
+    }).catch(error => {
+      console.error('Notification permission denied:', error);
+    });
+  } else {
+    showNotification(title, message);
+  }
+}
+
+function requestNotificationPermission() {
+  return new Promise((resolve, reject) => {
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        resolve();
+      } else {
+        reject(new Error('Notification permission denied'));
+      }
+    });
+  });
+}
+
+function showNotification(title, message) {
+  const notificationOptions = {
+    body: message,
+    icon: 'path/to/icon.png' // Replace with the path to your notification icon
+  };
+
+  const notification = new Notification(title, notificationOptions);
+
+  notification.onclick = function () {
+    // Handle notification click if needed
+    console.log('Notification clicked');
+  };
+}
 
     function toggleRecording() {
       if (!isRecording) {
