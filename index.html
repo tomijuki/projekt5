@@ -205,7 +205,7 @@ function showNotification(title, message) {
   if (typeof Notification === 'function') {
     const notificationOptions = {
       body: message,
-      icon: 'path/to/icon.png' // Replace with the path to your notification icon
+      icon: '/public/img/microphone.png' // Replace with the path to your notification icon
     };
 
     const notification = new Notification(title, notificationOptions);
@@ -219,44 +219,61 @@ function showNotification(title, message) {
   }
 }
 
-    function toggleRecording() {
-      if (!isRecording) {
-        startRecording();
-      } else {
-        stopRecording();
-      }
-      isRecording = !isRecording;
-      updateRecordingButtonState();
-    }
+let userMediaStream; // Declare a global variable to store the user media stream
+
+function toggleRecording() {
+  if (!isRecording) {
+    // Ask user for microphone permission
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((stream) => {
+        if (stream) {
+          userMediaStream = stream; // Store the stream in the global variable
+          startRecording();
+        } else {
+          console.log('Microphone permission not granted.');
+        }
+      })
+      .catch((error) => {
+        console.error('Error accessing microphone:', error);
+      });
+  } else {
+    stopRecording();
+    isRecording = false; // Set recording state to false
+    updateRecordingButtonState();
+  }
+}
 
     function updateRecordingButtonState() {
-      recordingButton.classList.toggle('recording', isRecording);
-    }
+  // Check if the microphone permission is granted and recording is active
+  if (isRecording || (mediaRecorder && mediaRecorder.state === 'recording')) {
+    recordingButton.classList.add('recording');
+  } else {
+    recordingButton.classList.remove('recording');
+  }
+}
 
     
 
-    function startRecording() {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then((stream) => {
-          mediaRecorder = new MediaRecorder(stream);
+function startRecording() {
+  if (!isRecording && userMediaStream) {
+    mediaRecorder = new MediaRecorder(userMediaStream);
 
-          mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              recordedChunks.push(event.data);
-            }
-          };
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunks.push(event.data);
+      }
+    };
 
-          mediaRecorder.onstop = () => {
-            saveAudioBlob();
-            recordedChunks = [];
-          };
+    mediaRecorder.onstop = () => {
+      saveAudioBlob();
+      recordedChunks = [];
+    };
 
-          mediaRecorder.start();
-        })
-        .catch((error) => {
-          console.error('Error accessing microphone:', error);
-        });
-    }
+    mediaRecorder.start();
+    isRecording = true;
+    updateRecordingButtonState();
+  }
+}
 
     function stopRecording() {
       if (mediaRecorder && (mediaRecorder.state === 'recording' || mediaRecorder.state === 'paused')) {
@@ -285,26 +302,36 @@ function showNotification(title, message) {
       updateTrackLength();
     }
 
-    function playPause() {
-      if (audioElement.paused) {
-        audioElement.play();
-        playPauseButton.textContent = 'Pause';
-      } else {
-        audioElement.pause();
-        playPauseButton.textContent = 'Play';
-      }
+function playPause() {
+  // Check if there is an audio file in the cache
+  if (audioElement.src) {
+    if (audioElement.paused) {
+      audioElement.play();
+      playPauseButton.textContent = 'Pause';
+    } else {
+      audioElement.pause();
+      playPauseButton.textContent = 'Play';
     }
+  } else {
+    console.log('No audio file in cache.');
+  }
+}
 
 function updateSeek() {
-  const seekValue = seekBar.value;
-  const newTime = seekValue * audioElement.duration;
+  // Check if there is an audio file in the cache
+  if (audioElement.src) {
+    const seekValue = seekBar.value;
+    const newTime = seekValue * audioElement.duration;
 
-  // Check if newTime is a finite number before setting currentTime
-  if (isFinite(newTime)) {
-    audioElement.currentTime = newTime;
-    updateTrackLength();
+    // Check if newTime is a finite number before setting currentTime
+    if (isFinite(newTime)) {
+      audioElement.currentTime = newTime;
+      updateTrackLength();
+    } else {
+      console.error('Invalid seek value:', newTime);
+    }
   } else {
-    console.error('Invalid seek value:', newTime);
+    console.log('No audio file in cache.');
   }
 }
 
