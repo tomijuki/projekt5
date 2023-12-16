@@ -3,8 +3,9 @@
     "version": "1.0.0",
     "description": "Audio Recording PWA App",
     "main": "index.html",
+    "start_url": "index.html",
     "scripts": {
-        "serve": "npm install && serve",
+        "serve": "npm install && serve -s ./",
         "build": "npm install"
     },
     "dependencies": {

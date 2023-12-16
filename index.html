@@ -129,7 +129,7 @@ openRequest.onerror = function () {
       const audioBlob = arrayBufferToBlob(audioItem, 'audio/wav');
       const audioBlobUrl = URL.createObjectURL(audioBlob);
       audioElement.src = audioBlobUrl;
-      audioElement.play();
+      playPause();
     }
 
     function removeAudioItem(audioitem, index) {
