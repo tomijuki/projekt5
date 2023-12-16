@@ -1,0 +1,359 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PWA App</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/public/site.css">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then((registration) => {
+          console.log('Service Worker registered with scope:', registration.scope);
+        })
+        .catch((error) => {
+          console.error('Service Worker registration failed:', error);
+        });
+    }
+  </script>
+</head>
+<body>
+  <button id="recording-button" onclick="toggleRecording()">Toggle Recording</button>
+
+  <div id="audio-controls">
+    <button onclick="playPause()" id="play-pause-button">Play</button>
+    <div id="seek-bar-container">
+      <input type="range" id="seek-bar" value="0" step="0.01" max="1" oninput="updateSeek()" />
+      <span id="track-length">0:00</span>
+    </div>
+    <div id="volume-bar-container">
+      <label for="volume">Volume:</label>
+      <input type="range" id="volume" min="0" max="1" step="0.1" value="1" oninput="setVolume()">
+    </div>
+    <button onclick="saveAudioToIndexedDB()">Save to IndexedDB</button>
+  </div>
+
+  <div id="audio-list-container" style="display: none;"></div>
+  <h2>Recorded Audio List</h2>
+  <div id="audio-list"></div>
+  <script>
+    const audioListContainer = document.getElementById('audio-list-container');
+    const audioList = document.getElementById('audio-list');
+    let mediaRecorder;
+    let recordedChunks = [];
+    let isRecording = false;
+    let volumeSlider = document.getElementById('volume');
+    let recordingButton = document.getElementById('recording-button');
+    let playPauseButton = document.getElementById('play-pause-button');
+    let audioElement = new Audio();
+    let seekBar = document.getElementById('seek-bar');
+    let trackLengthDisplay = document.getElementById('track-length');
+
+    if (audioList.childElementCount > 0) {
+      audioListContainer.style.display = 'block';
+    }
+
+    // Display saved items from IndexedDB
+document.addEventListener('DOMContentLoaded', () => {
+  const dbName = 'recordings';
+  const storeName = 'audio';
+
+const openRequest = indexedDB.open(dbName, 4);
+
+openRequest.onupgradeneeded = function (e) {
+  const db = e.target.result;
+  if (!db.objectStoreNames.contains(storeName)) {
+    db.createObjectStore(storeName);
+  }
+};
+
+openRequest.onsuccess = function (e) {
+  const db = e.target.result;
+
+  // Ensure the "audio" object store exists
+  if (!db.objectStoreNames.contains(storeName)) {
+    db.createObjectStore(storeName);
+  }
+
+  // Now that the database and object store are ready, display audio items
+  displayAudioItems();
+};
+
+openRequest.onerror = function () {
+  console.log('Failed to open database');
+};
+
+});
+
+    function displayAudioItems() {
+      const dbName = 'recordings';
+      const storeName = 'audio';
+
+      const openRequest = indexedDB.open(dbName);
+
+      openRequest.onsuccess = function (e) {
+        const db = e.target.result;
+        const transaction = db.transaction(storeName, 'readonly');
+        const store = transaction.objectStore(storeName);
+        const request = store.getAll();
+
+        request.onsuccess = function () {
+          const audioItems = request.result;
+          audioItems.forEach((audioItem, index) => {
+            displayAudioItem(audioItem, index);
+          });
+        };
+      };
+    }
+
+    function displayAudioItem(audioItem, index) {
+      const listItem = document.createElement('div');
+      listItem.textContent = `Recording ${index + 1}`;
+
+      const playButton = document.createElement('button');
+      playButton.textContent = 'Play';
+      playButton.addEventListener('click', () => playAudioItem(audioItem));
+      listItem.appendChild(playButton);
+
+      const removeButton = document.createElement('button');
+      removeButton.textContent = 'Remove';
+      removeButton.addEventListener('click', () => removeAudioItem(audioItem, index));
+      listItem.appendChild(removeButton);
+
+      audioList.appendChild(listItem);
+    }
+
+    function playAudioItem(audioItem) {
+      const audioBlob = arrayBufferToBlob(audioItem, 'audio/wav');
+      const audioBlobUrl = URL.createObjectURL(audioBlob);
+      audioElement.src = audioBlobUrl;
+      audioElement.play();
+    }
+
+    function removeAudioItem(audioitem, index) {
+      console.log('Removing audio item at index:', index);
+      const dbName = 'recordings';
+      const storeName = 'audio';
+
+      const openRequest = indexedDB.open(dbName);
+
+      openRequest.onsuccess = function (e) {
+        const db = e.target.result;
+        const transaction = db.transaction(storeName, 'readwrite');
+        const store = transaction.objectStore(storeName);
+
+        const request = store.getAllKeys();
+
+        request.onsuccess = function () {
+          const keys = request.result;
+          if (index < keys.length) {
+            const keyToRemove = keys[index];
+            console.log('Removing item with key:', keyToRemove);
+            const deleteRequest = store.delete(keyToRemove);
+
+            deleteRequest.onsuccess = function () {
+              console.log(`Recording at index ${index + 1} removed successfully`);
+              updateAudioList();
+            };
+
+            deleteRequest.onerror = function () {
+              console.log(`Failed to remove recording at index ${index + 1}`);
+            };
+          } else {
+            console.log('Invalid index for removal');
+          }
+        };
+      };
+    }
+
+    function toggleRecording() {
+      if (!isRecording) {
+        startRecording();
+      } else {
+        stopRecording();
+      }
+      isRecording = !isRecording;
+      updateRecordingButtonState();
+    }
+
+    function updateRecordingButtonState() {
+      recordingButton.classList.toggle('recording', isRecording);
+    }
+
+    
+
+    function startRecording() {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((stream) => {
+          mediaRecorder = new MediaRecorder(stream);
+
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              recordedChunks.push(event.data);
+            }
+          };
+
+          mediaRecorder.onstop = () => {
+            saveAudioBlob();
+            recordedChunks = [];
+          };
+
+          mediaRecorder.start();
+        })
+        .catch((error) => {
+          console.error('Error accessing microphone:', error);
+        });
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && (mediaRecorder.state === 'recording' || mediaRecorder.state === 'paused')) {
+        mediaRecorder.stop();
+        // Stop the tracks to release the microphone access
+        const tracks = mediaRecorder.stream.getTracks();
+        tracks.forEach(track => track.stop());
+      }
+    }
+
+    function saveAudioBlob() {
+      const audioBlob = new Blob(recordedChunks, { type: 'audio/wav' });
+      const cacheKey = 'recordedAudio';
+
+      caches.open('pwa-app-cache-v1').then((cache) => {
+        cache.put(cacheKey, new Response(audioBlob, { headers: { 'Content-Type': 'audio/wav' } }));
+      });
+
+      // Set audio element source after saving the blob
+      const audioBlobUrl = URL.createObjectURL(audioBlob);
+      audioElement.src = audioBlobUrl;
+
+      // Reset seek bar, volume, and track length display
+      seekBar.value = 0;
+      volumeSlider.value = 1;
+      updateTrackLength();
+    }
+
+    function playPause() {
+      if (audioElement.paused) {
+        audioElement.play();
+        playPauseButton.textContent = 'Pause';
+      } else {
+        audioElement.pause();
+        playPauseButton.textContent = 'Play';
+      }
+    }
+
+    function updateSeek() {
+      const seekValue = seekBar.value;
+      const newTime = seekValue * audioElement.duration;
+      audioElement.currentTime = newTime;
+      updateTrackLength();
+    }
+
+    function updateTrackLength() {
+      const duration = audioElement.duration || 0;
+      const currentTime = audioElement.currentTime;
+      const minutes = Math.floor(currentTime / 60);
+      const seconds = Math.floor(currentTime % 60);
+      const formattedTime = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+      trackLengthDisplay.textContent = formattedTime;
+    }
+
+    function setVolume() {
+      audioElement.volume = volumeSlider.value;
+    }
+
+    // Add event listener to continuously update seek bar as audio is played
+    audioElement.addEventListener('timeupdate', () => {
+      const progress = audioElement.currentTime / audioElement.duration;
+      seekBar.value = progress;
+
+      // Check if playback has reached the end
+      if (audioElement.currentTime === audioElement.duration) {
+        playPauseButton.textContent = 'Play';
+      }
+      updateTrackLength();
+    });
+
+function saveAudioToIndexedDB() {
+  const dbName = 'recordings';
+  const storeName = 'audio';
+
+  const openRequest = indexedDB.open(dbName);
+
+  openRequest.onupgradeneeded = function (e) {
+    const db = e.target.result;
+    if (!db.objectStoreNames.contains(storeName)) {
+      db.createObjectStore(storeName);
+    }
+  };
+
+  openRequest.onsuccess = async function (e) {
+    const db = e.target.result;
+
+    try {
+      // Fetch the audio blob
+      const audioBlob = await fetch(audioElement.src).then(response => response.blob());
+
+      // Start a new transaction and get the audio store
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+
+      // Generate a unique key for each recording
+      const key = 'recording_' + Date.now();
+
+      // Save the Blob to the object store with the unique key
+      const request = store.put(audioBlob, key);
+
+      // Handle the success and error events of the request
+      request.onsuccess = function () {
+        console.log('Audio saved successfully with key:', key);
+      };
+
+      request.onerror = function () {
+        console.log('Failed to save audio');
+      };
+
+      // Ensure the transaction is completed
+      transaction.oncomplete = function () {
+        console.log('Transaction completed');
+        updateAudioList();
+      };
+
+      transaction.onerror = function () {
+        console.log('Transaction failed');
+      };
+    } catch (error) {
+      console.error('Error fetching or processing audio blob:', error);
+    }
+  };
+
+  openRequest.onerror = function () {
+    console.log('Failed to open database');
+  };
+}
+
+function updateAudioList() {
+    audioList.innerHTML = ''; // Clear the current list
+    displayAudioItems(); // Display items again
+  }
+
+
+  function blobToArrayBuffer(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener('loadend', (e) => {
+        resolve(reader.result);
+      });
+      reader.addEventListener('error', reject);
+      reader.readAsArrayBuffer(blob);
+    });
+  }
+  
+  function arrayBufferToBlob(buffer, type) {
+    return new Blob([buffer], {type: type});
+  }
+  </script>
+</body>
+</html>

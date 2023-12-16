@@ -1,0 +1,24 @@
+{
+    "name": "PWA App",
+    "short_name": "PWA App",
+    "description": "App to demonstrate PWA features",
+    "display": "fullscreen",
+    "background_color": "#ffffff",
+    "theme_color": "#000000",
+    "icons": [
+        {
+            "src": "/public/img/microphone.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ],
+    "start_url": "./index.html",
+    "scope": ".",
+    "orientation": "portrait-primary",
+    "dir": "ltr",
+    "lang": "en-US",
+    "serviceworker": {
+        "src": "/service-worker.js",
+        "scope": "/"
+    }
+}
