@@ -244,12 +244,19 @@ openRequest.onerror = function () {
       }
     }
 
-    function updateSeek() {
-      const seekValue = seekBar.value;
-      const newTime = seekValue * audioElement.duration;
-      audioElement.currentTime = newTime;
-      updateTrackLength();
-    }
+function updateSeek() {
+  const seekValue = seekBar.value;
+  const newTime = seekValue * audioElement.duration;
+
+  // Check if newTime is a finite number before setting currentTime
+  if (isFinite(newTime)) {
+    audioElement.currentTime = newTime;
+    updateTrackLength();
+  } else {
+    console.error('Invalid seek value:', newTime);
+  }
+}
+
 
     function updateTrackLength() {
       const duration = audioElement.duration || 0;
