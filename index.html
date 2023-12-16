@@ -184,7 +184,7 @@ openRequest.onerror = function () {
 function notifyUser(title, message) {
   // Check if the browser supports notifications
   if (!('Notification' in window)) {
-    console.error('This browser does not support notifications.');
+    console.log('This browser does not support notifications.');
     return;
   }
 
@@ -193,7 +193,7 @@ function notifyUser(title, message) {
     requestNotificationPermission().then(() => {
       showNotification(title, message);
     }).catch(error => {
-      console.error('Notification permission denied:', error);
+      console.log('Notification permission denied');
     });
   } else {
     showNotification(title, message);
